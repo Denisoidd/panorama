@@ -10,83 +10,68 @@ using namespace cv;
 
 int main()
 {
+	//Uploadiong images
 	Mat I1 = imread("../IMG_0045.JPG", IMREAD_GRAYSCALE);
 	Mat I2 = imread("../IMG_0046.JPG", IMREAD_GRAYSCALE);
 
-	vector<KeyPoint> m1, m2;
+	vector<KeyPoint> m1, m2, l1, l2;
 	Mat desc1, desc2;
 
+	//Description and key points computation
 	Ptr<AKAZE> D = AKAZE::create();
 	D -> detectAndCompute(I1, noArray(), m1, desc1);
 	D -> detectAndCompute(I2, noArray(), m2, desc2);
 
-	//Mat J;
-	//drawKeypoints(
-
+	//Looking for 2 best matches to compare them after
 	BFMatcher M(NORM_HAMMING);
-	vector<DMatch> nn_matches;
-	M.match(desc1, desc2, nn_matches);
+	vector<vector <DMatch>> Knn_matches;
+	M.knnMatch(desc2, desc1, Knn_matches, 2);
 
-	Mat L;
-	drawMatches(I1, m1, I2, m2, nn_matches, L);
-	//imshow("Matches brute", L);
-
-	double max_dist = 0;
-	double min_dist = 100;
-
-	for (int i = 0; i < desc1.rows; i++){
-		double dist = nn_matches[i].distance;
-		if (dist < min_dist) min_dist = dist;
-		if (dist > max_dist) max_dist = dist;
-	}
-
+	//Using these two types of matches to find the best one
 	vector< DMatch > good_matches;
-
-	for (int i=0; i < desc1.rows; i++ )
-	{
-		if (nn_matches[i].distance < 5 * min_dist)
-		{
-			good_matches.push_back(nn_matches[i]);
+	for (size_t j = 0; j < Knn_matches.size(); j++){
+		DMatch closest = Knn_matches[j][0];
+		//Getting two distances to compare them after
+		double d1 = Knn_matches[j][0].distance;
+		double d2 = Knn_matches[j][1].distance;
+		//Took 0.7 for a matching ratio
+		if (d1 < d2 * 0.7){
+			int i = static_cast<int>(l1.size());
+			l1.push_back(m1[closest.trainIdx]);
+			l2.push_back(m2[closest.queryIdx]);
+			good_matches.push_back(DMatch(i,i,0));
 		}
 	}
 
-	Mat Lgood;
-	drawMatches(I1, m1, I2, m2, good_matches, Lgood);
-	imshow("Good matches", Lgood);
+	//Variable just to save the information
+	Mat L;
+	drawMatches(I1, l1, I2, l2, good_matches, L);
+	imshow("Good matches", L);
 
+	//To calculate homography
 	vector<Point2f> obj;
 	vector<Point2f> scene;
 
 	for (size_t i=0; i < good_matches.size(); i++){
-		obj.push_back(m1[good_matches[i].queryIdx].pt);
-		scene.push_back(m2[good_matches[i].trainIdx].pt);
+		obj.push_back(l1[good_matches[i].queryIdx].pt);
+		scene.push_back(l2[good_matches[i].trainIdx].pt);
 	}
 
-	Mat H = findHomography(obj, scene, RANSAC);
+	Mat H = findHomography(scene, obj, RANSAC);
 
-	Mat K(I1.rows, 2 * I1.cols, CV_8U);
+	//Apply the computed homography matrix to warp the second image
+  Mat Panorama(I1.rows, 2 * I1.cols,  CV_8U);
+  warpPerspective(I2, Panorama, H, Panorama.size());
+	imshow("Image before the end", Panorama);
 
-	//Mat I1_final;
-	Mat I2_final;
+  //Adding the first image on the changed by homography
+  for(int i = 0; i < I1.rows; i++){
+      for(int j = 0; j < I1.cols; j++)
+          Panorama.at<uchar>(i,j) = I1.at<uchar>(i,j);
+  }
+  imshow("Panorama", Panorama);
+  imwrite("Panorama.jpg", Panorama);
 
-	imshow("Image 1 before", I1);
-	imshow("Image 2 before", I2);
-
-	//warpPerspective(I1,I1_final, H, I1.size());
-	warpPerspective(I2,I2_final, H, I2.size());
-	//warpPerspective(I1,I1_final, H, I1.size());
-
-	hconcat(I1,I2_final,K);
-	//Mat Res(I1_final.rows, I1_final.cols + I2_final.cols, CV_8U);
-	//hconcat(I1_final, I2_final,Res);
-	//imshow("Resultat de warping", Res);
-	//imshow("I1 warped", I1_final);
-	//imshow("I2 warped", I2_final);
-
-	//imshow("Image 1 after", I1_final);
-	//imshow("Image 2 after", I2_final);
-	imshow("Panorame", K);
-
-	waitKey(0);
-	return 0;
+  waitKey(0);
+  return 0;
 }
