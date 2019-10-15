@@ -1,3 +1,0 @@
-/home/pirozhok/my_project_dir/INF573/TP4/build/CMakeFiles/rebuild_cache.dir
-/home/pirozhok/my_project_dir/INF573/TP4/build/CMakeFiles/homographie.dir
-/home/pirozhok/my_project_dir/INF573/TP4/build/CMakeFiles/edit_cache.dir
